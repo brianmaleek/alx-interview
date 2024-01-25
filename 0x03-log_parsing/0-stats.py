@@ -4,24 +4,32 @@ import re
 from collections import defaultdict
 
 
-LOG_PATTERN = r"(\d+\.\d+\.\d+\.\d+) - \[([^]]+)\] " \
-             r'"GET /projects/260 HTTP/1\.1" (\d+) (\d+)'
-
-
 def parse_line(line):
     """
-    Parse a log line and return extracted information or None if invalid.
+    Parse a log line and extract relevant information.
 
     Args:
-        line (str): The log line to be parsed.
+        line (str): Log line to be parsed.
 
     Returns:
-        tuple or None: A tuple containing parsed elements or None if invalid.
+        tuple: Tuple containing IP address, date, status code, and file size.
+               If the line does not match the expected format, returns None.
     """
-    match = re.match(LOG_PATTERN, line)
+    ip_address_pattern = r'(\d+\.\d+\.\d+\.\d+)'
+    date_pattern = r'\[([^]]+)\]'
+    request_pattern = r'"GET /projects/260 HTTP/1\.1"'
+    status_code_pattern = r'(\d+)'
+    file_size_pattern = r'(\d+)'
+
+    pattern = fr'{ip_address_pattern} - {date_pattern} {request_pattern}
+    {status_code_pattern} {file_size_pattern}'
+
+    match = re.match(pattern, line)
     if match:
-        return match.groups()
-    return None
+        ip_address, date, status_code, file_size = match.groups()
+        return ip_address, date, int(status_code), int(file_size)
+    else:
+        return None
 
 
 def print_statistics(total_size, status_counts):
@@ -29,34 +37,41 @@ def print_statistics(total_size, status_counts):
     Print the computed statistics.
 
     Args:
-        total_size (int): The total file size.
-        status_counts (dict): A dictionary mapping status codes to counts.
+        total_size (int): Total file size.
+        status_counts (dict): Dictionary containing counts of
+        each status code.
     """
     print(f"Total file size: {total_size}")
-    for code, count in sorted(status_counts.items()):
-        print(f"{code}: {count}")
+    for code in sorted(status_counts):
+        print(f"{code}: {status_counts[code]}")
 
 
 def main():
     """
-    Read log lines from stdin, compute and print statistics.
+    Read log lines from stdin, compute and print statistics at
+    regular intervals or on Ctrl+C.
     """
     total_size = 0
     status_counts = defaultdict(int)
+    lines_processed = 0
 
     try:
         for line in sys.stdin:
-            ip, date, status_code, file_size = parse_line(line) or (None,) * 4
-            if ip:  # Parsing successful
-                total_size += int(file_size)
-                status_counts[int(status_code)] += 1
-                print_statistics(total_size, status_counts)  # Print regularly
+            log_data = parse_line(line)
+            if log_data:
+                _, _, status_code, file_size = log_data
+                total_size += file_size
+                status_counts[status_code] += 1
+                lines_processed += 1
+
+                if lines_processed % 10 == 0:
+                    print_statistics(total_size, status_counts)
 
     except KeyboardInterrupt:
         pass  # Handle Ctrl+C gracefully
 
     finally:
-        print_statistics(total_size, status_counts)  # Always print final stats
+        print_statistics(total_size, status_counts)
 
 
 if __name__ == "__main__":
