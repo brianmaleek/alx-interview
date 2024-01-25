@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+"""log parsing"""
 import sys
 from collections import defaultdict
 
